@@ -1,4 +1,5 @@
 obs = obslua
+OpenSong = require("opensong-client")
 
 plugin_info = {
     name = "OpenSong lyric subtitles",
@@ -10,7 +11,12 @@ plugin_info = {
 
 plugin_settings = {}
 plugin_data = {}
-plugin_data.debug = true
+plugin_data.debug = false
+plugin_data.shutdown = false
+plugin_data.opensong = nil
+plugin_data.title = ""
+plugin_data.linesets = {}
+plugin_data.lineset_active = 0
 
 local function log(fmt, ...)
     if plugin_data.debug then
@@ -21,19 +27,119 @@ local function log(fmt, ...)
     end
 end
 
-function opensong_show_lyrics_previous(pressed)
-    if pressed then
-        log("opensong_show_lyrics_previous")
+local function opensong_connect(settings)
+    if plugin_data.opensong == nil then
+        local host = obs.obs_data_get_string(settings, "opensong_address")
+        local port = obs.obs_data_get_int(settings, "opensong_port")
+
+        if host and host ~= "" and port and port > 0 then
+            local uri = string.format("ws://%s:%d/ws", host, port)
+            local connection, err = OpenSong.Connect(uri)
+            if not connection then
+                log("Connection to OpenSong failed: %s", err)
+            else
+                plugin_data.opensong = connection
+                obs.timer_add(opensong_update_timer, 100)
+            end
+        end
     end
 end
 
-function opensong_show_lyrics_next(pressed)
-    if pressed then
-        log("opensong_show_lyrics_next")
+local function opensong_disconnect()
+    if plugin_data.opensong ~= nil then
+        plugin_data.opensong:close()
+        plugin_data.opensong = nil
     end
 end
 
-function opensong_show_lyrics_toggle(pressed)
+local function opensong_partition_lines(lines)
+    local lyrics_max_lines = obs.obs_data_get_int(plugin_settings, "lyrics_max_lines")
+    local lyrics_max_characters = obs.obs_data_get_int(plugin_settings, "lyrics_max_characters")
+
+    plugin_data.linesets = {}
+
+    local lineset = ""
+    local linecount = 0
+    for i,line in pairs(lines) do
+        local append = false
+        if linecount < lyrics_max_lines then
+            if #lineset + #line < lyrics_max_characters then
+                if #lineset > 0 then
+                    lineset = lineset .. "\n"
+                end
+                lineset = lineset .. line
+                linecount = linecount + 1
+                append = true
+            end
+        end
+
+        if not append then
+            log("Append lineset: (%d lines, %d chars)\n***\n%s\n***", linecount, #lineset, lineset)
+            table.insert(plugin_data.linesets, lineset)
+            lineset = line
+            linecount = 1
+        end
+    end
+
+    if #lineset > 0 then
+        log("Append lineset: (%d lines, %d chars)\n***\n%s\n***", linecount, #lineset, lineset)
+        table.insert(plugin_data.linesets, lineset)
+    end
+end
+
+local function update_lyrics()
+    if plugin_data.lineset_active > 0 and plugin_data.lineset_active <= #plugin_data.linesets then
+        local title_name = obs.obs_data_get_string(plugin_settings, "title_source")
+        local title_source = obs.obs_get_source_by_name(title_name)
+        if title_source ~= nil then
+            local settings = obs.obs_data_create()
+            obs.obs_data_set_string(settings, "text", plugin_data.title)
+            obs.obs_source_update(title_source, settings)
+            obs.obs_data_release(settings)
+            obs.obs_source_release(title_source)
+        end
+
+        local lyric_name = obs.obs_data_get_string(plugin_settings, "lyric_source")
+        local lyric_source = obs.obs_get_source_by_name(lyric_name)
+        if lyric_source ~= nil then
+            local settings = obs.obs_data_create()
+            obs.obs_data_set_string(settings, "text", plugin_data.linesets[plugin_data.lineset_active])
+            obs.obs_source_update(lyric_source, settings)
+            obs.obs_data_release(settings)
+            obs.obs_source_release(lyric_source)
+        end
+    end
+end
+
+function cb_show_lyrics_previous(pressed)
+    if pressed then
+        if plugin_data.opensong ~= nil then
+            log("cb_show_lyrics_previous")
+            if plugin_data.lineset_active > 1 then
+                plugin_data.lineset_active = plugin_data.lineset_active - 1
+            end
+            update_lyrics()
+        else
+            opensong_connect(plugin_settings)
+        end
+    end
+end
+
+function cb_show_lyrics_next(pressed)
+    if pressed then
+        if plugin_data.opensong ~= nil then
+            log("cb_show_lyrics_next")
+            if plugin_data.lineset_active < #plugin_data.linesets then
+                plugin_data.lineset_active = plugin_data.lineset_active + 1
+            end
+            update_lyrics()
+        else
+            opensong_connect(plugin_settings)
+        end
+    end
+end
+
+function cb_show_lyrics_toggle(pressed)
     if pressed then
         local title_name = obs.obs_data_get_string(plugin_settings, "title_source")
         local lyric_name = obs.obs_data_get_string(plugin_settings, "lyric_source")
@@ -44,7 +150,7 @@ function opensong_show_lyrics_toggle(pressed)
         local background_source = obs.obs_get_source_by_name(background_name)
 
         local lyrics_enabled = obs.obs_source_enabled(title_source) or obs.obs_source_enabled(lyric_source) obs.obs_source_enabled(background_source)
-        log("opensong_show_lyrics_toggle %s title (%s) lyric (%s) background (%s)", lyrics_enabled and "Disabled" or "Enabled", title_name, lyric_name, background_name)
+        log("cb_show_lyrics_toggle %s title (%s) lyric (%s) background (%s)", lyrics_enabled and "Disabled" or "Enabled", title_name, lyric_name, background_name)
 
         obs.obs_source_set_enabled(title_source, not lyrics_enabled)
         obs.obs_source_set_enabled(lyric_source, not lyrics_enabled)
@@ -52,10 +158,29 @@ function opensong_show_lyrics_toggle(pressed)
     end
 end
 
+function opensong_update_timer()
+    if not plugin_data.shutdown then
+        if plugin_data.opensong ~= nil then
+            if plugin_data.opensong:update() then
+                if plugin_data.opensong.slide then
+                    plugin_data.title = plugin_data.opensong.slide.lines
+                    opensong_partition_lines(plugin_data.opensong.slide.lines)
+                    plugin_data.lineset_active = 1
+                    update_lyrics()
+                end
+            end
+        else
+            opensong_connect(plugin_settings)
+        end
+    else
+        obs.remove_current_callback()
+    end
+end
+
 plugin_data.hotkeys = {
-    { id=nil, name="opensong_lyric_previous", description="Show previous OpenSong lyric lines", callback=opensong_show_lyrics_previous },
-    { id=nil, name="opensong_lyric_next", description="Show next OpenSong lyric lines", callback=opensong_show_lyrics_next },
-    { id=nil, name="opensong_lyric_toggle", description="Toggle OpenSong lyric visibility", callback=opensong_show_lyrics_toggle },
+    { id=nil, name="opensong_lyric_previous", description="Show previous OpenSong lyric lines", callback=cb_show_lyrics_previous },
+    { id=nil, name="opensong_lyric_next", description="Show next OpenSong lyric lines", callback=cb_show_lyrics_next },
+    { id=nil, name="opensong_lyric_toggle", description="Toggle OpenSong lyric visibility", callback=cb_show_lyrics_toggle },
 }
 
 function script_description()
@@ -71,6 +196,9 @@ function script_properties()
     obs.obs_properties_add_text(os_props, "opensong_address", "IP Address", obs.OBS_TEXT_DEFAULT)
     obs.obs_properties_add_int(os_props, "opensong_port", "Port", 1, 65535, 1)
     obs.obs_properties_add_group(props, "opensong", "OpenSong API Server", obs.OBS_GROUP_NORMAL, os_props)
+
+    obs.obs_properties_add_int(props, "lyrics_max_lines", "Maximum number of lines", 1, 25, 1)
+    obs.obs_properties_add_int(props, "lyrics_max_characters", "Maximum number of characters", 1, 500, 1)
 
     local title_list = obs.obs_properties_add_list(props, "title_source", "Text Source item for titles", obs.OBS_COMBO_TYPE_EDITABLE , obs.OBS_COMBO_FORMAT_STRING)
     local lyric_list = obs.obs_properties_add_list(props, "lyric_source", "Text Source item for lyrics", obs.OBS_COMBO_TYPE_EDITABLE , obs.OBS_COMBO_FORMAT_STRING)
@@ -106,9 +234,18 @@ end
 
 function script_update(settings)
     plugin_settings = settings
+    opensong_disconnect()
+    opensong_connect(settings)
+end
+
+function script_defaults(settings)
+    obs.obs_data_set_default_int(settings, "opensong_port", OpenSong.default_port)
+    obs.obs_data_set_default_int(settings, "lyrics_max_lines", 2)
+    obs.obs_data_set_default_int(settings, "lyrics_max_characters", 120)
 end
 
 function script_load(settings)
+    plugin_data.shutdown = false
     for _,hotkey in pairs(plugin_data.hotkeys) do
         hotkey.id = obs.obs_hotkey_register_frontend(hotkey.name, hotkey.description, hotkey.callback)
         local a = obs.obs_data_get_array(settings, hotkey.name .. "_hotkey")
@@ -116,8 +253,10 @@ function script_load(settings)
         obs.obs_data_array_release(a)
     end
 
-    local port = obs.obs_data_get_int(settings, "opensong_port")
-    if port == nil or port == 0 then
-        obs.obs_data_set_int(settings, "opensong_port", 8082)
-    end
+    opensong_connect(settings)
+end
+
+function script_unload()
+    plugin_data.shutdown = true
+    opensong_disconnect()
 end
