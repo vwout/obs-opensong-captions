@@ -35,7 +35,9 @@ function OpenSong.Connect(uri)
 
     function connection.close()
         local ws = connection.ws
-        ws:close()
+        if ws ~= nil then
+            ws:close()
+        end
     end
 
     function connection.update()
