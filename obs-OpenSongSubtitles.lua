@@ -5,7 +5,7 @@ plugin_info = {
     name = "OpenSong lyric subtitles",
     version = "0.1",
     url = "https://github.com/vwout/obs-opensong-subtitles",
-    description = "Show lyrics and other fragments from OpenSong slides in a scene",
+    description = "Show lyrics and other text fragments from OpenSong slides in a scene",
     author = "vwout"
 }
 
@@ -15,6 +15,7 @@ plugin_data.debug = false
 plugin_data.shutdown = false
 plugin_data.opensong = nil
 plugin_data.title = ""
+plugin_data.slide_type = ""
 plugin_data.linesets = {}
 plugin_data.lineset_active = 0
 
@@ -54,8 +55,8 @@ local function opensong_disconnect()
 end
 
 local function opensong_partition_lines(lines)
-    local lyrics_max_lines = obs.obs_data_get_int(plugin_settings, "lyrics_max_lines")
-    local lyrics_max_characters = obs.obs_data_get_int(plugin_settings, "lyrics_max_characters")
+    local subtitles_max_lines = obs.obs_data_get_int(plugin_settings, "subtitles_max_lines")
+    local subtitles_max_characters = obs.obs_data_get_int(plugin_settings, "subtitles_max_characters")
 
     plugin_data.linesets = {}
 
@@ -63,8 +64,8 @@ local function opensong_partition_lines(lines)
     local linecount = 0
     for i,line in pairs(lines) do
         local append = false
-        if linecount < lyrics_max_lines then
-            if #lineset + #line < lyrics_max_characters then
+        if linecount < subtitles_max_lines then
+            if #lineset + #line < subtitles_max_characters then
                 if #lineset > 0 then
                     lineset = lineset .. "\n"
                 end
@@ -80,8 +81,8 @@ local function opensong_partition_lines(lines)
                 table.insert(plugin_data.linesets, lineset)
             end
 
-            if #line > lyrics_max_characters then
-                local pos = line:reverse():find("[.,;:]", #line - lyrics_max_characters) - 1
+            if #line > subtitles_max_characters then
+                local pos = line:reverse():find("[.,;:]", #line - subtitles_max_characters) - 1
                 local part = line:sub(1, #line - pos)
                 local remainder = line:sub(#line - pos+1)
                 remainder = remainder:match("^%s*(.-)%s*$")
@@ -103,59 +104,74 @@ local function opensong_partition_lines(lines)
     end
 end
 
-local function update_lyrics()
-    if plugin_data.lineset_active > 0 and plugin_data.lineset_active <= #plugin_data.linesets then
-        local title_name = obs.obs_data_get_string(plugin_settings, "title_source")
-        local title_source = obs.obs_get_source_by_name(title_name)
-        if title_source ~= nil then
-            local settings = obs.obs_data_create()
-            obs.obs_data_set_string(settings, "text", plugin_data.title)
-            obs.obs_source_update(title_source, settings)
-            obs.obs_data_release(settings)
-            obs.obs_source_release(title_source)
-        end
+local function update_subtitles()
+    local show_slide_song = obs.obs_data_get_bool(plugin_settings, "slide_song")
+    local show_slide_scripture = obs.obs_data_get_bool(plugin_settings, "slide_scripture")
+    local show_slide_custom = obs.obs_data_get_bool(plugin_settings, "slide_custom")
 
-        local lyric_name = obs.obs_data_get_string(plugin_settings, "lyric_source")
-        local lyric_source = obs.obs_get_source_by_name(lyric_name)
-        if lyric_source ~= nil then
-            local settings = obs.obs_data_create()
-            obs.obs_data_set_string(settings, "text", plugin_data.linesets[plugin_data.lineset_active])
-            obs.obs_source_update(lyric_source, settings)
-            obs.obs_data_release(settings)
-            obs.obs_source_release(lyric_source)
+    local show_subtitles = false
+    if plugin_data.slide_type == "song" and show_slide_song then
+        show_subtitles = true
+    elseif plugin_data.slide_type == "scripture" and show_slide_scripture then
+        show_subtitles = true
+    elseif plugin_data.slide_type == "custom" and show_slide_custom then
+        show_subtitles = true
+    end
+
+    if show_subtitles then
+        if plugin_data.lineset_active > 0 and plugin_data.lineset_active <= #plugin_data.linesets then
+            local title_name = obs.obs_data_get_string(plugin_settings, "title_source")
+            local title_source = obs.obs_get_source_by_name(title_name)
+            if title_source ~= nil then
+                local settings = obs.obs_data_create()
+                obs.obs_data_set_string(settings, "text", plugin_data.title)
+                obs.obs_source_update(title_source, settings)
+                obs.obs_data_release(settings)
+                obs.obs_source_release(title_source)
+            end
+    
+            local lyric_name = obs.obs_data_get_string(plugin_settings, "lyric_source")
+            local lyric_source = obs.obs_get_source_by_name(lyric_name)
+            if lyric_source ~= nil then
+                local settings = obs.obs_data_create()
+                obs.obs_data_set_string(settings, "text", plugin_data.linesets[plugin_data.lineset_active])
+                obs.obs_source_update(lyric_source, settings)
+                obs.obs_data_release(settings)
+                obs.obs_source_release(lyric_source)
+            end
         end
     end
 end
 
-function cb_show_lyrics_previous(pressed)
+function cb_show_subtitles_previous(pressed)
     if pressed then
         if plugin_data.opensong ~= nil then
-            log("cb_show_lyrics_previous")
+            log("cb_show_subtitles_previous")
             if plugin_data.lineset_active > 1 then
                 plugin_data.lineset_active = plugin_data.lineset_active - 1
             end
-            update_lyrics()
+            update_subtitles()
         else
             opensong_connect(plugin_settings)
         end
     end
 end
 
-function cb_show_lyrics_next(pressed)
+function cb_show_subtitles_next(pressed)
     if pressed then
         if plugin_data.opensong ~= nil then
-            log("cb_show_lyrics_next")
+            log("cb_show_subtitles_next")
             if plugin_data.lineset_active < #plugin_data.linesets then
                 plugin_data.lineset_active = plugin_data.lineset_active + 1
             end
-            update_lyrics()
+            update_subtitles()
         else
             opensong_connect(plugin_settings)
         end
     end
 end
 
-function cb_show_lyrics_toggle(pressed)
+function cb_show_subtitles_toggle(pressed)
     if pressed then
         local title_name = obs.obs_data_get_string(plugin_settings, "title_source")
         local lyric_name = obs.obs_data_get_string(plugin_settings, "lyric_source")
@@ -165,12 +181,12 @@ function cb_show_lyrics_toggle(pressed)
         local lyric_source = obs.obs_get_source_by_name(lyric_name)
         local background_source = obs.obs_get_source_by_name(background_name)
 
-        local lyrics_enabled = obs.obs_source_enabled(title_source) or obs.obs_source_enabled(lyric_source) obs.obs_source_enabled(background_source)
-        log("cb_show_lyrics_toggle %s title (%s) lyric (%s) background (%s)", lyrics_enabled and "Disabled" or "Enabled", title_name, lyric_name, background_name)
+        local subtitles_enabled = obs.obs_source_enabled(title_source) or obs.obs_source_enabled(lyric_source) or obs.obs_source_enabled(background_source)
+        log("cb_show_subtitles_toggle %s title (%s) lyric (%s) background (%s)", subtitles_enabled and "Disabled" or "Enabled", title_name, lyric_name, background_name)
 
-        obs.obs_source_set_enabled(title_source, not lyrics_enabled)
-        obs.obs_source_set_enabled(lyric_source, not lyrics_enabled)
-        obs.obs_source_set_enabled(background_source, not lyrics_enabled)
+        obs.obs_source_set_enabled(title_source, not subtitles_enabled)
+        obs.obs_source_set_enabled(lyric_source, not subtitles_enabled)
+        obs.obs_source_set_enabled(background_source, not subtitles_enabled)
     end
 end
 
@@ -179,10 +195,11 @@ function opensong_update_timer()
         if plugin_data.opensong ~= nil then
             if plugin_data.opensong:update() then
                 if plugin_data.opensong.slide then
-                    plugin_data.title = plugin_data.opensong.slide.lines
+                    plugin_data.slide_type = plugin_data.opensong.slide.type
+                    plugin_data.title = plugin_data.opensong.slide.title
                     opensong_partition_lines(plugin_data.opensong.slide.lines)
                     plugin_data.lineset_active = 1
-                    update_lyrics()
+                    update_subtitles()
                 end
             end
         else
@@ -194,9 +211,9 @@ function opensong_update_timer()
 end
 
 plugin_data.hotkeys = {
-    { id=nil, name="opensong_lyric_previous", description="Show previous OpenSong lyric lines", callback=cb_show_lyrics_previous },
-    { id=nil, name="opensong_lyric_next", description="Show next OpenSong lyric lines", callback=cb_show_lyrics_next },
-    { id=nil, name="opensong_lyric_toggle", description="Toggle OpenSong lyric visibility", callback=cb_show_lyrics_toggle },
+    { id=nil, name="opensong_lyric_previous", description="Show previous OpenSong lyric lines", callback=cb_show_subtitles_previous },
+    { id=nil, name="opensong_lyric_next", description="Show next OpenSong lyric lines", callback=cb_show_subtitles_next },
+    { id=nil, name="opensong_lyric_toggle", description="Toggle OpenSong lyric visibility", callback=cb_show_subtitles_toggle },
 }
 
 function script_description()
@@ -213,12 +230,18 @@ function script_properties()
     obs.obs_properties_add_int(os_props, "opensong_port", "Port", 1, 65535, 1)
     obs.obs_properties_add_group(props, "opensong", "OpenSong API Server", obs.OBS_GROUP_NORMAL, os_props)
 
-    obs.obs_properties_add_int(props, "lyrics_max_lines", "Maximum number of lines", 1, 25, 1)
-    obs.obs_properties_add_int(props, "lyrics_max_characters", "Maximum number of characters", 1, 500, 1)
+    local type_props = obs.obs_properties_create()
+    obs.obs_properties_add_bool(type_props, "slide_song", "Song")
+    obs.obs_properties_add_bool(type_props, "slide_scripture", "Scripture")
+    obs.obs_properties_add_bool(type_props, "slide_custom", "Custom")
+    obs.obs_properties_add_group(props, "slide_types", "Show subtitles for slides of type:", obs.OBS_GROUP_NORMAL, type_props)
+
+    obs.obs_properties_add_int(props, "subtitles_max_lines", "Maximum number of lines", 1, 25, 1)
+    obs.obs_properties_add_int(props, "subtitles_max_characters", "Maximum number of characters", 1, 500, 1)
 
     local title_list = obs.obs_properties_add_list(props, "title_source", "Text Source item for titles", obs.OBS_COMBO_TYPE_EDITABLE , obs.OBS_COMBO_FORMAT_STRING)
-    local lyric_list = obs.obs_properties_add_list(props, "lyric_source", "Text Source item for lyrics", obs.OBS_COMBO_TYPE_EDITABLE , obs.OBS_COMBO_FORMAT_STRING)
-    local background_list = obs.obs_properties_add_list(props, "background_source", "Background for lyrics block", obs.OBS_COMBO_TYPE_EDITABLE, obs.OBS_COMBO_FORMAT_STRING)
+    local lyric_list = obs.obs_properties_add_list(props, "lyric_source", "Text Source item for subtitles", obs.OBS_COMBO_TYPE_EDITABLE , obs.OBS_COMBO_FORMAT_STRING)
+    local background_list = obs.obs_properties_add_list(props, "background_source", "Background for subtitles block", obs.OBS_COMBO_TYPE_EDITABLE, obs.OBS_COMBO_FORMAT_STRING)
 
     local sources = obs.obs_enum_sources()
     if sources ~= nil then
@@ -256,8 +279,11 @@ end
 
 function script_defaults(settings)
     obs.obs_data_set_default_int(settings, "opensong_port", OpenSong.default_port)
-    obs.obs_data_set_default_int(settings, "lyrics_max_lines", 2)
-    obs.obs_data_set_default_int(settings, "lyrics_max_characters", 120)
+    obs.obs_data_set_default_bool(settings, "slide_song", true)
+    obs.obs_data_set_default_bool(settings, "slide_scripture", true)
+    obs.obs_data_set_default_bool(settings, "slide_custom", false)
+    obs.obs_data_set_default_int(settings, "subtitles_max_lines", 2)
+    obs.obs_data_set_default_int(settings, "subtitles_max_characters", 120)
 end
 
 function script_load(settings)
