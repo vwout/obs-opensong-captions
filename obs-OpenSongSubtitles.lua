@@ -18,6 +18,7 @@ plugin_data.title = ""
 plugin_data.linesets = {}
 plugin_data.lineset_active = 0
 
+
 local function log(fmt, ...)
     if plugin_data.debug then
         local info = debug.getinfo(2, "nl")
@@ -74,8 +75,23 @@ local function opensong_partition_lines(lines)
         end
 
         if not append then
-            log("Append lineset: (%d lines, %d chars)\n***\n%s\n***", linecount, #lineset, lineset)
-            table.insert(plugin_data.linesets, lineset)
+            if #lineset > 0 then
+                log("Append lineset: (%d lines, %d chars)\n***\n%s\n***", linecount, #lineset, lineset)
+                table.insert(plugin_data.linesets, lineset)
+            end
+
+            if #line > lyrics_max_characters then
+                local pos = line:reverse():find("[.,;:]", #line - lyrics_max_characters) - 1
+                local part = line:sub(1, #line - pos)
+                local remainder = line:sub(#line - pos+1)
+                remainder = remainder:match("^%s*(.-)%s*$")
+                line = part
+
+                if #remainder > 0 then
+                    table.insert(lines, i+1, remainder)
+                end
+            end
+
             lineset = line
             linecount = 1
         end
