@@ -12,6 +12,7 @@ function OpenSong.Connect(uri)
     }
 
     connection.slide.identifier = nil
+    connection.slide.type = nil
     connection.slide.title = nil
     connection.slide.lines = {}
 
@@ -47,7 +48,7 @@ function OpenSong.Connect(uri)
         local data, typ, err = ws:recv_frame()
         if data then
             if data:sub(1, 5) == "<?xml" then
-                print(data)
+                --print(data)
                 local action = data:match("action=\"(%a+)\"")
                 if action == "status" then
                     local itemnumber = tonumber(data:match("<slide itemnumber=\"(%d+)\">"))
@@ -56,13 +57,16 @@ function OpenSong.Connect(uri)
                     end
                 elseif action == "slide" then
                     local identifier = tonumber(data:match("identifier=\"(%d+)\""))
+                    local slide_type = data:match("type=\"([^\"]+)\"")
                     local title = data:match("<title>([^<]+)</title>")
                     local lines = data:match("<body>([^<]+)</body>")
 
-                    print(title)
-                    print(lines)
+                    --print(slide_type)
+                    --print(title)
+                    --print(lines)
                     if identifier and title and lines then
                         connection.slide.identifier = identifier
+                        connection.slide.type = slide_type
                         connection.slide.title = title
                         connection.slide.lines = {}
                         for str in lines:gmatch("([^\r\n]+)") do
