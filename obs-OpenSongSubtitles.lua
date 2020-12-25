@@ -107,6 +107,38 @@ local function opensong_partition_lines(lines)
     end
 end
 
+local function backgrounds_set_enabled(subtitles_enabled)
+    local background_song_name = obs.obs_data_get_string(plugin_settings, "background_song_source")
+    local background_scripture_name = obs.obs_data_get_string(plugin_settings, "background_scripture_source")
+    local background_custom_name = obs.obs_data_get_string(plugin_settings, "background_custom_source")
+
+    local background_song_source = obs.obs_get_source_by_name(background_song_name)
+    if background_song_source ~= nil then
+        obs.obs_source_set_enabled(background_song_source, subtitles_enabled and
+                                                           ((plugin_data.slide_type == "song") or
+                                                            ((background_song_name == background_scripture_name) and plugin_data.slide_type == "scripture") or
+                                                            ((background_song_name == background_custom_name) and plugin_data.slide_type == "custom")))
+    end
+
+    if background_scripture_name ~= background_song_name then
+        local background_scripture_source = obs.obs_get_source_by_name(background_scripture_name)
+        if background_scripture_source ~= nil then
+            obs.obs_source_set_enabled(background_scripture_source, subtitles_enabled and
+                                                                    ((plugin_data.slide_type == "scripture") or
+                                                                     ((background_scripture_name == background_custom_name) and plugin_data.slide_type == "custom")))
+        end
+    end
+
+
+    if (background_custom_name ~= background_song_name) and (background_custom_name ~= background_scripture_name) then
+        local background_custom_source = obs.obs_get_source_by_name(background_custom_name)
+        if background_custom_source ~= nil then
+            obs.obs_source_set_enabled(background_custom_source, subtitles_enabled and
+                                                                 (plugin_data.slide_type == "custom"))
+        end
+    end
+end
+
 local function update_subtitles()
     local show_slide_song = obs.obs_data_get_bool(plugin_settings, "slide_song")
     local show_slide_scripture = obs.obs_data_get_bool(plugin_settings, "slide_scripture")
@@ -142,6 +174,8 @@ local function update_subtitles()
                 obs.obs_data_release(settings)
                 obs.obs_source_release(lyric_source)
             end
+
+            backgrounds_set_enabled(true)
         end
     end
 end
@@ -178,18 +212,26 @@ function cb_show_subtitles_toggle(pressed)
     if pressed then
         local title_name = obs.obs_data_get_string(plugin_settings, "title_source")
         local lyric_name = obs.obs_data_get_string(plugin_settings, "lyric_source")
-        local background_name = obs.obs_data_get_string(plugin_settings, "background_source")
+        local background_song_name = obs.obs_data_get_string(plugin_settings, "background_song_source")
+        local background_scripture_name = obs.obs_data_get_string(plugin_settings, "background_scripture_source")
+        local background_custom_name = obs.obs_data_get_string(plugin_settings, "background_custom_source")
 
         local title_source = obs.obs_get_source_by_name(title_name)
         local lyric_source = obs.obs_get_source_by_name(lyric_name)
-        local background_source = obs.obs_get_source_by_name(background_name)
+        local background_song_source = obs.obs_get_source_by_name(background_song_name)
+        local background_scripture_source = obs.obs_get_source_by_name(background_scripture_name)
+        local background_custom_source = obs.obs_get_source_by_name(background_custom_name)
 
-        local subtitles_enabled = obs.obs_source_enabled(title_source) or obs.obs_source_enabled(lyric_source) or obs.obs_source_enabled(background_source)
-        log("cb_show_subtitles_toggle %s title (%s) lyric (%s) background (%s)", subtitles_enabled and "Disabled" or "Enabled", title_name, lyric_name, background_name)
+        local subtitles_enabled = obs.obs_source_enabled(title_source) or
+                                  obs.obs_source_enabled(lyric_source) or
+                                  obs.obs_source_enabled(background_song_source) or
+                                  obs.obs_source_enabled(background_scripture_source) or
+                                  obs.obs_source_enabled(background_custom_source)
+        log("cb_show_subtitles_toggle %s title (%s) lyric (%s)", subtitles_enabled and "Disabled" or "Enabled", title_name, lyric_name)
 
         obs.obs_source_set_enabled(title_source, not subtitles_enabled)
         obs.obs_source_set_enabled(lyric_source, not subtitles_enabled)
-        obs.obs_source_set_enabled(background_source, not subtitles_enabled)
+        backgrounds_set_enabled(not subtitles_enabled)
     end
 end
 
