@@ -81,20 +81,23 @@ local function opensong_partition_lines(lines)
                 table.insert(plugin_data.linesets, lineset)
             end
 
-            if #line > subtitles_max_characters then
-                local pos = line:reverse():find("[.,;:]", #line - subtitles_max_characters) - 1
-                local part = line:sub(1, #line - pos)
-                local remainder = line:sub(#line - pos+1)
-                remainder = remainder:match("^%s*(.-)%s*$")
-                line = part
+            if line then
+                local linelen = string.len(line)
+                if linelen > subtitles_max_characters then
+                    local pos = line:reverse():find("[.,;:]", linelen - subtitles_max_characters) - 1
+                    local part = line:sub(1, linelen - pos)
+                    local remainder = line:sub(linelen - pos+1)
+                    remainder = remainder:match("^%s*(.-)%s*$")
+                    line = part
 
-                if #remainder > 0 then
-                    table.insert(lines, i+1, remainder)
+                    if #remainder > 0 then
+                        table.insert(lines, i+1, remainder)
+                    end
                 end
-            end
 
-            lineset = line
-            linecount = 1
+                lineset = line
+                linecount = 1
+            end
         end
     end
 
@@ -241,7 +244,9 @@ function script_properties()
 
     local title_list = obs.obs_properties_add_list(props, "title_source", "Text Source item for titles", obs.OBS_COMBO_TYPE_EDITABLE , obs.OBS_COMBO_FORMAT_STRING)
     local lyric_list = obs.obs_properties_add_list(props, "lyric_source", "Text Source item for subtitles", obs.OBS_COMBO_TYPE_EDITABLE , obs.OBS_COMBO_FORMAT_STRING)
-    local background_list = obs.obs_properties_add_list(props, "background_source", "Background for subtitles block", obs.OBS_COMBO_TYPE_EDITABLE, obs.OBS_COMBO_FORMAT_STRING)
+    local background_song_list = obs.obs_properties_add_list(props, "background_song_source", "Background source for song", obs.OBS_COMBO_TYPE_EDITABLE, obs.OBS_COMBO_FORMAT_STRING)
+    local background_scripture_list = obs.obs_properties_add_list(props, "background_scripture_source", "Background source for scripture", obs.OBS_COMBO_TYPE_EDITABLE, obs.OBS_COMBO_FORMAT_STRING)
+    local background_custom_list = obs.obs_properties_add_list(props, "background_custom_source", "Background source for custom", obs.OBS_COMBO_TYPE_EDITABLE, obs.OBS_COMBO_FORMAT_STRING)
 
     local sources = obs.obs_enum_sources()
     if sources ~= nil then
@@ -250,7 +255,9 @@ function script_properties()
             local source_name = obs.obs_source_get_name(source)
             --log("script_properties source %s => %s", source_id, source_name)
 
-            obs.obs_property_list_add_string(background_list, source_name, source_name)
+            obs.obs_property_list_add_string(background_song_list, source_name, source_name)
+            obs.obs_property_list_add_string(background_scripture_list, source_name, source_name)
+            obs.obs_property_list_add_string(background_custom_list, source_name, source_name)
 
             if source_id == "text_gdiplus" or source_id == "text_gdiplus_v2" or source_id == "text_ft2_source" then
                 obs.obs_property_list_add_string(title_list, source_name, source_name)
