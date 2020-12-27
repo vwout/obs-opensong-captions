@@ -238,14 +238,19 @@ end
 function opensong_update_timer()
     if not plugin_data.shutdown then
         if plugin_data.opensong ~= nil then
-            if plugin_data.opensong:update() then
-                if plugin_data.opensong.slide then
-                    plugin_data.slide_type = plugin_data.opensong.slide.type
-                    plugin_data.title = plugin_data.opensong.slide.title
-                    opensong_partition_lines(plugin_data.opensong.slide.lines)
-                    plugin_data.lineset_active = 1
-                    update_subtitles()
+            if plugin_data.opensong.is_connected() then
+                if plugin_data.opensong:update() then
+                    if plugin_data.opensong.slide then
+                        plugin_data.slide_type = plugin_data.opensong.slide.type
+                        plugin_data.title = plugin_data.opensong.slide.title
+                        opensong_partition_lines(plugin_data.opensong.slide.lines)
+                        plugin_data.lineset_active = 1
+                        update_subtitles()
+                    end
                 end
+            else
+                log("Connection to OpenSong lost")
+                opensong_disconnect()
             end
         else
             opensong_connect(plugin_settings)
@@ -323,7 +328,7 @@ end
 function script_update(settings)
     plugin_settings = settings
     opensong_disconnect()
-    opensong_connect(settings)
+    --opensong_connect(settings)
 end
 
 function script_defaults(settings)

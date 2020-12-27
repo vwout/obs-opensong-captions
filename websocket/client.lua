@@ -366,4 +366,13 @@ function _M.set_keepalive(self, ...)
 end
 
 
+function _M.is_connected(self)
+    local sock = self.sock
+    if not sock then
+        return false
+    end
+
+    return sock:is_connected()
+end
+
 return _M
