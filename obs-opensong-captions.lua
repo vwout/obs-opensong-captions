@@ -115,33 +115,35 @@ local function opensong_partition_lines(lines)
 end
 
 local function backgrounds_set_enabled(captions_enabled)
-    local background_song_name = obs.obs_data_get_string(plugin_settings, "background_song_source")
-    local background_scripture_name = obs.obs_data_get_string(plugin_settings, "background_scripture_source")
-    local background_custom_name = obs.obs_data_get_string(plugin_settings, "background_custom_source")
+    if not plugin_data.shutdown then
+        local background_song_name = obs.obs_data_get_string(plugin_settings, "background_song_source")
+        local background_scripture_name = obs.obs_data_get_string(plugin_settings, "background_scripture_source")
+        local background_custom_name = obs.obs_data_get_string(plugin_settings, "background_custom_source")
 
-    local background_song_source = obs.obs_get_source_by_name(background_song_name)
-    if background_song_source ~= nil then
-        obs.obs_source_set_enabled(background_song_source, captions_enabled and
-                                                           ((plugin_data.slide_type == "song") or
-                                                            ((background_song_name == background_scripture_name) and plugin_data.slide_type == "scripture") or
-                                                            ((background_song_name == background_custom_name) and plugin_data.slide_type == "custom")))
-    end
-
-    if background_scripture_name ~= background_song_name then
-        local background_scripture_source = obs.obs_get_source_by_name(background_scripture_name)
-        if background_scripture_source ~= nil then
-            obs.obs_source_set_enabled(background_scripture_source, captions_enabled and
-                                                                    ((plugin_data.slide_type == "scripture") or
-                                                                     ((background_scripture_name == background_custom_name) and plugin_data.slide_type == "custom")))
+        local background_song_source = obs.obs_get_source_by_name(background_song_name)
+        if background_song_source ~= nil then
+            obs.obs_source_set_enabled(background_song_source, captions_enabled and
+                                                               ((plugin_data.slide_type == "song") or
+                                                                ((background_song_name == background_scripture_name) and plugin_data.slide_type == "scripture") or
+                                                                ((background_song_name == background_custom_name) and plugin_data.slide_type == "custom")))
         end
-    end
+
+        if background_scripture_name ~= background_song_name then
+            local background_scripture_source = obs.obs_get_source_by_name(background_scripture_name)
+            if background_scripture_source ~= nil then
+                obs.obs_source_set_enabled(background_scripture_source, captions_enabled and
+                                                                        ((plugin_data.slide_type == "scripture") or
+                                                                         ((background_scripture_name == background_custom_name) and plugin_data.slide_type == "custom")))
+            end
+        end
 
 
-    if (background_custom_name ~= background_song_name) and (background_custom_name ~= background_scripture_name) then
-        local background_custom_source = obs.obs_get_source_by_name(background_custom_name)
-        if background_custom_source ~= nil then
-            obs.obs_source_set_enabled(background_custom_source, captions_enabled and
-                                                                 (plugin_data.slide_type == "custom"))
+        if (background_custom_name ~= background_song_name) and (background_custom_name ~= background_scripture_name) then
+            local background_custom_source = obs.obs_get_source_by_name(background_custom_name)
+            if background_custom_source ~= nil then
+                obs.obs_source_set_enabled(background_custom_source, captions_enabled and
+                                                                     (plugin_data.slide_type == "custom"))
+            end
         end
     end
 end
