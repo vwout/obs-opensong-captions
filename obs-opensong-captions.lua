@@ -81,18 +81,24 @@ local function opensong_partition_lines(lines)
                 table.insert(plugin_data.linesets, lineset)
             end
 
-            if line then
+            if (line ~= nil) and (line ~= "") then
                 local linelen = string.len(line)
                 if linelen > captions_max_characters then
-                    local pos = line:reverse():find("[.,;:]", linelen - captions_max_characters) - 1
-                    local part = line:sub(1, linelen - pos)
-                    local remainder = line:sub(linelen - pos+1)
-                    remainder = remainder:match("^%s*(.-)%s*$")
-                    line = part
+				    local reverse_line = line:reverse()
+					if reverse_line ~= nil then
+						local pos = reverse_line:find("[.,;:]", linelen - captions_max_characters)
+                        if (pos ~= nil) and (pos > 1) then
+                            pos = pos - 1
+						    local part = line:sub(1, linelen - pos)
+						    local remainder = line:sub(linelen - pos+1)
+						    remainder = remainder:match("^%s*(.-)%s*$")
+						    line = part
 
-                    if #remainder > 0 then
-                        table.insert(lines, i+1, remainder)
-                    end
+						    if #remainder > 0 then
+							    table.insert(lines, i+1, remainder)
+                            end
+                        end
+					end
                 end
 
                 lineset = line
