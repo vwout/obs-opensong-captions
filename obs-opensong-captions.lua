@@ -18,6 +18,7 @@ plugin_data.title = ""
 plugin_data.slide_type = ""
 plugin_data.linesets = {}
 plugin_data.lineset_active = 0
+plugin_data.captions_visible = true
 
 
 local function log(fmt, ...)
@@ -145,43 +146,57 @@ local function backgrounds_set_enabled(captions_enabled)
     end
 end
 
-local function update_captions()
+local function show_slide_captions(slide_type)
     local show_slide_song = obs.obs_data_get_bool(plugin_settings, "slide_song")
     local show_slide_scripture = obs.obs_data_get_bool(plugin_settings, "slide_scripture")
     local show_slide_custom = obs.obs_data_get_bool(plugin_settings, "slide_custom")
 
     local show_captions = false
-    if plugin_data.slide_type == "song" and show_slide_song then
+    if slide_type == "song" and show_slide_song then
         show_captions = true
-    elseif plugin_data.slide_type == "scripture" and show_slide_scripture then
+    elseif slide_type == "scripture" and show_slide_scripture then
         show_captions = true
-    elseif plugin_data.slide_type == "custom" and show_slide_custom then
+    elseif slide_type == "custom" and show_slide_custom then
         show_captions = true
     end
 
-    if show_captions then
-        if plugin_data.lineset_active > 0 and plugin_data.lineset_active <= #plugin_data.linesets then
-            local title_name = obs.obs_data_get_string(plugin_settings, "title_source")
-            local title_source = obs.obs_get_source_by_name(title_name)
-            if title_source ~= nil then
-                local settings = obs.obs_data_create()
-                obs.obs_data_set_string(settings, "text", plugin_data.title)
-                obs.obs_source_update(title_source, settings)
-                obs.obs_data_release(settings)
-                obs.obs_source_release(title_source)
-            end
-    
-            local caption_name = obs.obs_data_get_string(plugin_settings, "caption_source")
-            local caption_source = obs.obs_get_source_by_name(caption_name)
-            if caption_source ~= nil then
-                local settings = obs.obs_data_create()
-                obs.obs_data_set_string(settings, "text", plugin_data.linesets[plugin_data.lineset_active])
-                obs.obs_source_update(caption_source, settings)
-                obs.obs_data_release(settings)
-                obs.obs_source_release(caption_source)
-            end
+    return show_captions
+end
 
-            backgrounds_set_enabled(true)
+local function set_title_text(settings, title_text)
+    if not plugin_data.shutdown then
+        local title_name = obs.obs_data_get_string(settings, "title_source")
+        local title_source = obs.obs_get_source_by_name(title_name)
+        if title_source ~= nil then
+            local data = obs.obs_data_create()
+            obs.obs_data_set_string(data, "text", title_text)
+            obs.obs_source_update(title_source, data)
+            obs.obs_data_release(data)
+            obs.obs_source_release(title_source)
+        end
+    end
+end
+
+local function set_caption_text(settings, caption_text)
+    if not plugin_data.shutdown then
+        local caption_name = obs.obs_data_get_string(settings, "caption_source")
+        local caption_source = obs.obs_get_source_by_name(caption_name)
+        if caption_source ~= nil then
+            local data = obs.obs_data_create()
+            obs.obs_data_set_string(data, "text", caption_text)
+            obs.obs_source_update(caption_source, data)
+            obs.obs_data_release(data)
+            obs.obs_source_release(caption_source)
+        end
+    end
+end
+
+local function update_captions()
+    if show_slide_captions(plugin_data.slide_type) then
+        if plugin_data.lineset_active > 0 and plugin_data.lineset_active <= #plugin_data.linesets then
+            set_title_text(plugin_settings, plugin_data.title)
+            set_caption_text(plugin_settings, plugin_data.linesets[plugin_data.lineset_active])
+            backgrounds_set_enabled(plugin_data.captions_visible)
         end
     end
 end
@@ -229,15 +244,16 @@ function cb_show_captions_toggle(pressed)
         local background_custom_source = obs.obs_get_source_by_name(background_custom_name)
 
         local captions_enabled = obs.obs_source_enabled(title_source) or
-                                  obs.obs_source_enabled(caption_source) or
-                                  obs.obs_source_enabled(background_song_source) or
-                                  obs.obs_source_enabled(background_scripture_source) or
-                                  obs.obs_source_enabled(background_custom_source)
+                                 obs.obs_source_enabled(caption_source) or
+                                 obs.obs_source_enabled(background_song_source) or
+                                 obs.obs_source_enabled(background_scripture_source) or
+                                 obs.obs_source_enabled(background_custom_source)
         log("cb_show_captions_toggle %s title (%s) caption (%s)", captions_enabled and "Disabled" or "Enabled", title_name, caption_name)
 
-        obs.obs_source_set_enabled(title_source, not captions_enabled)
-        obs.obs_source_set_enabled(caption_source, not captions_enabled)
-        backgrounds_set_enabled(not captions_enabled)
+        plugin_data.captions_visible = not captions_enabled
+        obs.obs_source_set_enabled(title_source, plugin_data.captions_visible)
+        obs.obs_source_set_enabled(caption_source, plugin_data.captions_visible)
+        backgrounds_set_enabled(plugin_data.captions_visible)
     end
 end
 
@@ -247,11 +263,13 @@ function opensong_update_timer()
             if plugin_data.opensong.is_connected() then
                 if plugin_data.opensong:update() then
                     if plugin_data.opensong.slide then
-                        plugin_data.slide_type = plugin_data.opensong.slide.type
-                        plugin_data.title = plugin_data.opensong.slide.title
-                        opensong_partition_lines(plugin_data.opensong.slide.lines)
-                        plugin_data.lineset_active = 1
-                        update_captions()
+						if show_slide_captions(plugin_data.opensong.slide.type) then
+                            plugin_data.slide_type = plugin_data.opensong.slide.type
+							plugin_data.title = plugin_data.opensong.slide.title
+							opensong_partition_lines(plugin_data.opensong.slide.lines)
+							plugin_data.lineset_active = 1
+							update_captions()
+						end
                     end
                 end
             else
@@ -354,6 +372,9 @@ function script_load(settings)
         obs.obs_hotkey_load(hotkey.id, a)
         obs.obs_data_array_release(a)
     end
+
+    set_title_text(settings, "")
+    set_caption_text(settings, "")
 
     opensong_connect(settings)
 end
