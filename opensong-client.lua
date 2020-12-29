@@ -79,6 +79,11 @@ function OpenSong.Connect(uri)
                             connection.slide.title = title
                             connection.slide.lines = {}
                             for str in lines:gmatch("([^\r\n]+)") do
+                                -- Remove special characters
+                                str = str:gsub("[^%a%d%p%s]", "")
+                                -- Remove duplicate spaces
+                                str = str:gsub("  ", " ")
+                                -- Trim the string
                                 str = str:match("^%s*(.-)%s*$")
                                 if str ~= "" then
                                     table.insert(connection.slide.lines, str)
