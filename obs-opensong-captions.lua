@@ -135,6 +135,7 @@ local function backgrounds_set_enabled(captions_enabled)
                                                                         ((plugin_data.slide_type == "scripture") or
                                                                          ((background_scripture_name == background_custom_name) and plugin_data.slide_type == "custom")))
             end
+            obs.obs_source_release(background_scripture_source)
         end
 
 
@@ -144,7 +145,10 @@ local function backgrounds_set_enabled(captions_enabled)
                 obs.obs_source_set_enabled(background_custom_source, captions_enabled and
                                                                      (plugin_data.slide_type == "custom"))
             end
+            obs.obs_source_release(background_custom_source)
         end
+
+        obs.obs_source_release(background_song_source)
     end
 end
 
@@ -165,30 +169,15 @@ local function show_slide_captions(slide_type)
     return show_captions
 end
 
-local function set_title_text(settings, title_text)
+local function set_text_source_text(text_name, title_text)
     if not plugin_data.shutdown then
-        local title_name = obs.obs_data_get_string(settings, "title_source")
-        local title_source = obs.obs_get_source_by_name(title_name)
-        if title_source ~= nil then
-            local data = obs.obs_data_create()
+        local text_source = obs.obs_get_source_by_name(text_name)
+        if text_source ~= nil then
+            local data = obs.obs_source_get_settings(text_source)
             obs.obs_data_set_string(data, "text", title_text)
-            obs.obs_source_update(title_source, data)
+            obs.obs_source_update(text_source, data)
             obs.obs_data_release(data)
-            obs.obs_source_release(title_source)
-        end
-    end
-end
-
-local function set_caption_text(settings, caption_text)
-    if not plugin_data.shutdown then
-        local caption_name = obs.obs_data_get_string(settings, "caption_source")
-        local caption_source = obs.obs_get_source_by_name(caption_name)
-        if caption_source ~= nil then
-            local data = obs.obs_data_create()
-            obs.obs_data_set_string(data, "text", caption_text)
-            obs.obs_source_update(caption_source, data)
-            obs.obs_data_release(data)
-            obs.obs_source_release(caption_source)
+            obs.obs_source_release(text_source)
         end
     end
 end
@@ -196,8 +185,10 @@ end
 local function update_captions()
     if show_slide_captions(plugin_data.slide_type) then
         if plugin_data.lineset_active > 0 and plugin_data.lineset_active <= #plugin_data.linesets then
-            set_title_text(plugin_settings, plugin_data.title)
-            set_caption_text(plugin_settings, plugin_data.linesets[plugin_data.lineset_active])
+            local title_source_name = obs.obs_data_get_string(plugin_settings, "title_source")
+            set_text_source_text(title_source_name, plugin_data.title)
+            local caption_source_name = obs.obs_data_get_string(plugin_settings, "caption_source")
+            set_text_source_text(caption_source_name, plugin_data.linesets[plugin_data.lineset_active])
             backgrounds_set_enabled(plugin_data.captions_visible)
         end
     end
@@ -256,6 +247,12 @@ function cb_show_captions_toggle(pressed)
         obs.obs_source_set_enabled(title_source, plugin_data.captions_visible)
         obs.obs_source_set_enabled(caption_source, plugin_data.captions_visible)
         backgrounds_set_enabled(plugin_data.captions_visible)
+
+        obs.obs_source_release(title_source)
+        obs.obs_source_release(caption_source)
+        obs.obs_source_release(background_song_source)
+        obs.obs_source_release(background_scripture_source)
+        obs.obs_source_release(background_custom_source)
     end
 end
 
@@ -324,7 +321,7 @@ function script_properties()
     local sources = obs.obs_enum_sources()
     if sources ~= nil then
         for _, source in ipairs(sources) do
-            local source_id = obs.obs_source_get_id(source)
+            local source_id = obs.obs_source_get_unversioned_id(source)
             local source_name = obs.obs_source_get_name(source)
             --log("script_properties source %s => %s", source_id, source_name)
 
@@ -375,8 +372,10 @@ function script_load(settings)
         obs.obs_data_array_release(a)
     end
 
-    set_title_text(settings, "")
-    set_caption_text(settings, "")
+    local title_source_name = obs.obs_data_get_string(settings, "title_source")
+    set_text_source_text(title_source_name, "")
+    local caption_source_name = obs.obs_data_get_string(settings, "caption_source")
+    set_text_source_text(caption_source_name, "")
 
     opensong_connect(settings)
 end
