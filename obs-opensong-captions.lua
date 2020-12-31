@@ -3,7 +3,7 @@ OpenSong = require("opensong-client")
 
 plugin_info = {
     name = "OpenSong captions",
-    version = "0.1",
+    version = "0.2",
     url = "https://github.com/vwout/obs-opensong-captions",
     description = "Show lyrics and other text fragments from OpenSong slides in a scene as caption.",
     author = "vwout"
