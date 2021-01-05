@@ -203,8 +203,10 @@ function cb_show_captions_previous(pressed)
             log("cb_show_captions_previous")
             if plugin_data.lineset_active > 1 then
                 plugin_data.lineset_active = plugin_data.lineset_active - 1
+                update_captions()
+            else
+                plugin_data.opensong:request_status()
             end
-            update_captions()
         else
             opensong_connect(plugin_settings)
         end

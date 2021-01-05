@@ -50,6 +50,20 @@ function OpenSong.Connect(uri)
         return ws:is_connected()
     end
 
+    function connection.request_status()
+        local ws = connection.ws
+        if not ws then
+            return false
+        end
+
+        local bytes, err = ws:send_text("/presentation/status")
+        if not bytes then
+            return false
+        end
+
+        return true
+    end
+
     function connection.update()
         local updated  = false
 
@@ -58,8 +72,8 @@ function OpenSong.Connect(uri)
             local data, typ, err = ws:recv_frame()
             --print(data, typ, err)
             if data then
+                --print(data)
                 if data:sub(1, 5) == "<?xml" then
-                    --print(data)
                     local action = data:match("action=\"(%a+)\"")
                     if action == "status" then
                         local itemnumber = tonumber(data:match("<slide itemnumber=\"(%d+)\">"))

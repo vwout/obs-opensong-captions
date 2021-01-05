@@ -255,11 +255,7 @@ function _M.recv_frame(self)
         return nil, nil, "not initialized yet"
     end
 
-    local data, typ, err =  _recv_frame(sock, self.max_payload_len, false)
-    if not data and not str_find(err, ": timeout", 1, true) then
-        --self.fatal = true
-    end
-    return data, typ, err
+    return _recv_frame(sock, self.max_payload_len, false)
 end
 
 

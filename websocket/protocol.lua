@@ -63,8 +63,11 @@ end
 
 function _M.recv_frame(sock, max_payload_len, force_masking)
     local data, err, num = sock:receive(2)
+    if err == "timeout" then
+        return nil, nil, nil
+    end
     if not data then
-        return nil, nil, "failed to receive the first 2 bytes (" ..  tostring(num) .. "): " .. err
+        return nil, nil, "failed to receive the first 2 bytes (" ..  tostring(num) .. "): " .. (err or "?")
     end
 
     local fst, snd = byte(data, 1, 2)
@@ -73,11 +76,11 @@ function _M.recv_frame(sock, max_payload_len, force_masking)
     -- print("fin: ", fin)
 
     if band(fst, 0x70) ~= 0 then
-        return nil, nil, "bad RSV1, RSV2, or RSV3 bits"
+        return nil, nil, string.format("bad RSV1, RSV2, or RSV3 bits: %x", fst)
     end
 
     local opcode = band(fst, 0x0f)
-    -- print("opcode: ", tohex(opcode))
+    -- print(string.format("opcode: %x", opcode))
 
     if opcode >= 0x3 and opcode <= 0x7 then
         return nil, nil, "reserved non-control frames"
