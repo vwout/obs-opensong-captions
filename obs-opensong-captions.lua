@@ -41,7 +41,13 @@ local function opensong_connect(settings)
             if not connection then
                 log("Connection to OpenSong failed: %s", err)
             else
+                plugin_data.shutdown = false
                 plugin_data.opensong = connection
+
+                --plugin_data.title = ""
+                --plugin_data.linesets = { "" }
+                plugin_data.lineset_active = 1
+
                 obs.timer_add(opensong_update_timer, 100)
             end
         end
@@ -49,6 +55,7 @@ local function opensong_connect(settings)
 end
 
 local function opensong_disconnect()
+    plugin_data.shutdown = true
     if plugin_data.opensong ~= nil then
         plugin_data.opensong:close()
         plugin_data.opensong = nil
@@ -115,41 +122,39 @@ local function opensong_partition_lines(lines)
 end
 
 local function backgrounds_set_enabled(captions_enabled)
-    if not plugin_data.shutdown then
-        local background_song_name = obs.obs_data_get_string(plugin_settings, "background_song_source")
-        local background_scripture_name = obs.obs_data_get_string(plugin_settings, "background_scripture_source")
-        local background_custom_name = obs.obs_data_get_string(plugin_settings, "background_custom_source")
+    local background_song_name = obs.obs_data_get_string(plugin_settings, "background_song_source")
+    local background_scripture_name = obs.obs_data_get_string(plugin_settings, "background_scripture_source")
+    local background_custom_name = obs.obs_data_get_string(plugin_settings, "background_custom_source")
 
-        local background_song_source = obs.obs_get_source_by_name(background_song_name)
-        if background_song_source ~= nil then
-            obs.obs_source_set_enabled(background_song_source, captions_enabled and
-                                                               ((plugin_data.slide_type == "song") or
-                                                                ((background_song_name == background_scripture_name) and plugin_data.slide_type == "scripture") or
-                                                                ((background_song_name == background_custom_name) and plugin_data.slide_type == "custom")))
-        end
-
-        if background_scripture_name ~= background_song_name then
-            local background_scripture_source = obs.obs_get_source_by_name(background_scripture_name)
-            if background_scripture_source ~= nil then
-                obs.obs_source_set_enabled(background_scripture_source, captions_enabled and
-                                                                        ((plugin_data.slide_type == "scripture") or
-                                                                         ((background_scripture_name == background_custom_name) and plugin_data.slide_type == "custom")))
-            end
-            obs.obs_source_release(background_scripture_source)
-        end
-
-
-        if (background_custom_name ~= background_song_name) and (background_custom_name ~= background_scripture_name) then
-            local background_custom_source = obs.obs_get_source_by_name(background_custom_name)
-            if background_custom_source ~= nil then
-                obs.obs_source_set_enabled(background_custom_source, captions_enabled and
-                                                                     (plugin_data.slide_type == "custom"))
-            end
-            obs.obs_source_release(background_custom_source)
-        end
-
-        obs.obs_source_release(background_song_source)
+    local background_song_source = obs.obs_get_source_by_name(background_song_name)
+    if background_song_source ~= nil then
+        obs.obs_source_set_enabled(background_song_source, captions_enabled and
+                                                           ((plugin_data.slide_type == "song") or
+                                                            ((background_song_name == background_scripture_name) and plugin_data.slide_type == "scripture") or
+                                                            ((background_song_name == background_custom_name) and plugin_data.slide_type == "custom")))
     end
+
+    if background_scripture_name ~= background_song_name then
+        local background_scripture_source = obs.obs_get_source_by_name(background_scripture_name)
+        if background_scripture_source ~= nil then
+            obs.obs_source_set_enabled(background_scripture_source, captions_enabled and
+                                                                    ((plugin_data.slide_type == "scripture") or
+                                                                     ((background_scripture_name == background_custom_name) and plugin_data.slide_type == "custom")))
+        end
+        obs.obs_source_release(background_scripture_source)
+    end
+
+
+    if (background_custom_name ~= background_song_name) and (background_custom_name ~= background_scripture_name) then
+        local background_custom_source = obs.obs_get_source_by_name(background_custom_name)
+        if background_custom_source ~= nil then
+            obs.obs_source_set_enabled(background_custom_source, captions_enabled and
+                                                                 (plugin_data.slide_type == "custom"))
+        end
+        obs.obs_source_release(background_custom_source)
+    end
+
+    obs.obs_source_release(background_song_source)
 end
 
 local function show_slide_captions(slide_type)
@@ -170,15 +175,13 @@ local function show_slide_captions(slide_type)
 end
 
 local function set_text_source_text(text_name, title_text)
-    if not plugin_data.shutdown then
-        local text_source = obs.obs_get_source_by_name(text_name)
-        if text_source ~= nil then
-            local data = obs.obs_source_get_settings(text_source)
-            obs.obs_data_set_string(data, "text", title_text)
-            obs.obs_source_update(text_source, data)
-            obs.obs_data_release(data)
-            obs.obs_source_release(text_source)
-        end
+    local text_source = obs.obs_get_source_by_name(text_name)
+    if text_source ~= nil then
+        local data = obs.obs_source_get_settings(text_source)
+        obs.obs_data_set_string(data, "text", title_text)
+        obs.obs_source_update(text_source, data)
+        obs.obs_data_release(data)
+        obs.obs_source_release(text_source)
     end
 end
 
@@ -224,14 +227,14 @@ end
 
 function cb_show_captions_toggle(pressed)
     if pressed then
-        local title_name = obs.obs_data_get_string(plugin_settings, "title_source")
-        local caption_name = obs.obs_data_get_string(plugin_settings, "caption_source")
+        local title_source_name = obs.obs_data_get_string(plugin_settings, "title_source")
+        local caption_source_name = obs.obs_data_get_string(plugin_settings, "caption_source")
         local background_song_name = obs.obs_data_get_string(plugin_settings, "background_song_source")
         local background_scripture_name = obs.obs_data_get_string(plugin_settings, "background_scripture_source")
         local background_custom_name = obs.obs_data_get_string(plugin_settings, "background_custom_source")
 
-        local title_source = obs.obs_get_source_by_name(title_name)
-        local caption_source = obs.obs_get_source_by_name(caption_name)
+        local title_source = obs.obs_get_source_by_name(title_source_name)
+        local caption_source = obs.obs_get_source_by_name(caption_source_name)
         local background_song_source = obs.obs_get_source_by_name(background_song_name)
         local background_scripture_source = obs.obs_get_source_by_name(background_scripture_name)
         local background_custom_source = obs.obs_get_source_by_name(background_custom_name)
@@ -241,9 +244,17 @@ function cb_show_captions_toggle(pressed)
                                  obs.obs_source_enabled(background_song_source) or
                                  obs.obs_source_enabled(background_scripture_source) or
                                  obs.obs_source_enabled(background_custom_source)
-        log("cb_show_captions_toggle %s title (%s) caption (%s)", captions_enabled and "Disabled" or "Enabled", title_name, caption_name)
+        log("cb_show_captions_toggle %s title (%s) caption (%s)", captions_enabled and "Disabled" or "Enabled", title_source_name, caption_source_name)
 
         plugin_data.captions_visible = not captions_enabled
+        if plugin_data.captions_visible then
+            opensong_connect(plugin_settings)
+        else
+            opensong_disconnect()
+            set_text_source_text(title_source_name, "")
+            set_text_source_text(caption_source_name, "")
+        end
+
         obs.obs_source_set_enabled(title_source, plugin_data.captions_visible)
         obs.obs_source_set_enabled(caption_source, plugin_data.captions_visible)
         backgrounds_set_enabled(plugin_data.captions_visible)
@@ -351,7 +362,6 @@ end
 function script_update(settings)
     plugin_settings = settings
     opensong_disconnect()
-    --opensong_connect(settings)
 end
 
 function script_defaults(settings)
